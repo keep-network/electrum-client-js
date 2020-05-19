@@ -1,7 +1,7 @@
 const SocketClient = require('../socket/socket_client')
 const util = require('./util')
 
-const keepAliveInterval = 120 * 1000 // 2 minutes
+const keepAliveInterval = 450 * 1000 // 7.5 minutes as recommended by ElectrumX SESSION_TIMEOUT
 
 class ElectrumClient extends SocketClient {
   constructor(host, port, protocol, options) {
@@ -95,7 +95,7 @@ class ElectrumClient extends SocketClient {
     ]
 
     // TODO: We should probably leave listeners if the have persistency policy.
-    list.forEach((event) => this.subscribe.removeAllListeners(event))
+    list.forEach((event) => this.events.removeAllListeners(event))
 
     // Stop keep alive.
     clearInterval(this.keepAliveHandle)
