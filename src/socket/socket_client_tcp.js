@@ -5,10 +5,9 @@ const TIMEOUT = 10000
 
 class SocketClient {
   constructor(self, host, port, protocol, options) {
-    let conn
+    let conn = new net.Socket()
     switch (protocol) {
       case 'tcp':
-        conn = new net.Socket()
         break
       case 'tls':
       case 'ssl':
@@ -18,7 +17,7 @@ class SocketClient {
         } catch (e) {
           throw new Error('tls package could not be loaded')
         }
-        conn = new tls.TLSSocket(options)
+        conn = new tls.TLSSocket(conn, options)
         break
       default:
         throw new Error('not supported protocol', protocol)
