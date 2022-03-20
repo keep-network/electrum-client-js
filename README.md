@@ -30,7 +30,7 @@ const ElectrumClient = require('@keep-network/electrum-client-js')
 
 async function main() {
   const client = new ElectrumClient(
-    'fortress.qtornado.com',
+    'electrum.bitaroo.net',
     50002,
     'ssl'
   )

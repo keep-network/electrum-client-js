@@ -1,7 +1,7 @@
 const ElectrumClient = require('..')
 
 const main = async () => {
-  const ecl = new ElectrumClient('fortress.qtornado.com', 50002, 'tls')
+  const ecl = new ElectrumClient('electrum.bitaroo.net', 50002, 'tls', true)
   await ecl.connect()
   try {
     const ver = await ecl.server_version('3.0.5', '1.4')

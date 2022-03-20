@@ -4,8 +4,9 @@ const util = require('./util')
 const keepAliveInterval = 120 * 1000 // 2 minutes
 
 class ElectrumClient extends SocketClient {
-  constructor(host, port, protocol, options) {
+  constructor(host, port, protocol, debug = false, options) {
     super(host, port, protocol, options)
+    this.debug = debug;
   }
 
   async connect(clientName, electrumProtocolVersion, persistencePolicy = {maxRetry: 10, callback: null}) {
@@ -18,14 +19,16 @@ class ElectrumClient extends SocketClient {
         // Connect to Electrum Server.
         await super.connect()
 
-        // Get banner.
-        const banner = await this.server_banner()
-        console.log(banner)
+        if (this.debug) {
+          // Get banner.
+          const banner = await this.server_banner()
+          console.log(banner)
 
-        // Negotiate protocol version.
-        if (clientName && electrumProtocolVersion) {
-          const version = await this.server_version(clientName, electrumProtocolVersion)
-          console.log(`Negotiated version: [${version}]`)
+          // Negotiate protocol version.
+          if (clientName && electrumProtocolVersion) {
+            const version = await this.server_version(clientName, electrumProtocolVersion)
+            console.log(`Negotiated version: [${version}]`)
+          }
         }
       } catch (err) {
         throw new Error(`failed to connect to electrum server: [${err}]`)

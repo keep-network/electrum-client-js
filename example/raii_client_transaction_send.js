@@ -24,7 +24,7 @@ const createRaiiClient = (port, host, protocol, options) => {
 }
 
 const main = async (hex) => {
-  const hosts = ['fortress.qtornado.com', 'electrumx.tamami-foundation.org']
+  const hosts = ['electrum.bitaroo.net', 'electrumx.tamami-foundation.org']
 
   const host = hosts[Math.floor(Math.random() * hosts.length)]
 
