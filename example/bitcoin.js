@@ -1,7 +1,7 @@
 const ElectrumClient = require('..')
 
 const config = {
-  host: 'fortress.qtornado.com',
+  host: 'electrum.bitaroo.net',
   port: 50002,
   protocol: 'ssl',
 }
