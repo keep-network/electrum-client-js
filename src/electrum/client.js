@@ -5,7 +5,7 @@ const keepAliveInterval = 120 * 1000 // 2 minutes
 
 class ElectrumClient extends SocketClient {
   constructor(host, port, protocol, debug = false, options) {
-    super(host, port, protocol, options)
+    super(host, port, protocol, debug, options)
     this.debug = debug;
   }
 

@@ -6,13 +6,15 @@ const TCPSocketClient = require('./socket_client_tcp')
 const WebSocketClient = require('./socket_client_ws')
 
 class SocketClient {
-  constructor(host, port, protocol, options) {
+  constructor(host, port, protocol, debug, options) {
     this.id = 0
     this.host = host
     this.port = port
     this.protocol = protocol
+    this.debug = debug
     this.options = options
     this.status = 0
+    this.retry = 0
     this.callback_message_queue = {}
     this.subscribe = new EventEmitter()
     this.mp = new util.MessageParser((body, n) => {
@@ -82,6 +84,7 @@ class SocketClient {
   }
 
   onConnect() {
+    this.retry = 0
   }
 
   onClose(event) {
@@ -96,12 +99,34 @@ class SocketClient {
     this.mp.run(chunk)
   }
 
-  onEnd(error) {
-    console.log(`onEnd: [${error}]`)
+  async delay(secs=0) {
+    return new Promise(resolve => setTimeout(() => resolve(), secs * 1000))
   }
 
-  onError(error) {
-    console.log(`onError: [${error}]`)
+  async onEnd(error) {
+    if (this.debug) {
+      console.log(`Trying to reconnect server with [${error}]`)
+    }
+    this.status = 0
+    // Clean up existing connection
+    this.client.close()
+    await this.delay(1);
+    this.connect()
+  }
+
+  async onError(error) {
+    if (this.retry < 10) {
+      if (this.debug) {
+        console.log('Retrying connection to server')
+      }
+      this.retry = this.retry + 1;
+      // Clean up existing connection
+      this.client.close()
+      await this.delay(1);
+      this.connect()
+    } else {
+      console.log(`Failed connection onError: [${error}]`)
+    }
   }
 }
 
