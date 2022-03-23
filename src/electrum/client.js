@@ -6,18 +6,22 @@ const keepAliveInterval = 450 * 1000 // 7.5 minutes as recommended by ElectrumX 
 class ElectrumClient extends SocketClient {
   constructor(host, port, protocol, options) {
     super(host, port, protocol, options)
+    this.noReconnect = false
+    this.keepAliveRunning = false
+    this.reconnecting = false
+    // Reconnect after 2 seconds for default
+    this.reconnectOn = 2000
+    this.timeLastCall = 0
   }
 
-  async connect(clientName, electrumProtocolVersion, persistencePolicy = {maxRetry: 10, callback: null}) {
-    this.persistencePolicy = persistencePolicy
-
-    this.timeLastCall = 0
-
+  async connect(clientName, electrumProtocolVersion) {
     if (this.status === 0) {
       try {
         // Connect to Electrum Server.
         await super.connect()
-
+        // Commented out to avoid parsing error caused by frequent connect calls.
+        // Should be called by manually.
+        /*
         // Get banner.
         const banner = await this.server_banner()
         console.log(banner)
@@ -27,6 +31,7 @@ class ElectrumClient extends SocketClient {
           const version = await this.server_version(clientName, electrumProtocolVersion)
           console.log(`Negotiated version: [${version}]`)
         }
+        */
       } catch (err) {
         throw new Error(`failed to connect to electrum server: [${err}]`)
       }
@@ -62,7 +67,7 @@ class ElectrumClient extends SocketClient {
    * logs an error and closes the connection.
    */
   async keepAlive() {
-    if (this.status !== 0) {
+    if (this.status !== 0 && !this.keepAliveRunning) {
       this.keepAliveHandle = setInterval(
         async (client) => {
           if (this.timeLastCall !== 0 &&
@@ -70,23 +75,67 @@ class ElectrumClient extends SocketClient {
             await client.server_ping()
               .catch((err) => {
                 console.error(`ping to server failed: [${err}]`)
-                client.close() // TODO: we should reconnect
+                this.reset()
               })
           }
         },
         keepAliveInterval,
         this // pass this context as an argument to function
       )
+      this.keepAliveRunning = true
     }
   }
 
+  // close remote connection with server without reconnection enabled
+  // should not be used if you want to reconnect
   close() {
+    this.noReconnect = true
     return super.close()
+  }
+
+  // close remote connection with server with reconnection enabled
+  // can be used like the reset button
+  reset() {
+    this.noReconnect = false
+    return super.close()
+  }
+
+  // Update reconnect period in miliseconds
+  updateInterval(reconnectOn) {
+    this.reconnectOn = reconnectOn
   }
 
   onClose() {
     super.onClose()
+    this.initReconnect()
+  }
 
+  onEnd() {
+    super.onEnd()
+    this.initReconnect()
+  }
+
+  onTimeout() {
+    super.onTimeout()
+    this.initReconnect()
+  }
+
+  initReconnect() {
+    this.removeAllListeners()
+
+    // Stop keep alive.
+    clearInterval(this.keepAliveHandle)
+    this.keepAliveRunning = false
+
+    // Try reconnection after 2 seconds (Will be resolved once reconnected)
+    if (!this.noReconnect) {
+      setTimeout(() => {
+        this.reconnect()
+      }, this.reconnectOn)
+    }
+  }
+
+  removeAllListeners() {
     const list = [
       'server.peers.subscribe',
       'blockchain.numblocks.subscribe',
@@ -96,25 +145,21 @@ class ElectrumClient extends SocketClient {
 
     // TODO: We should probably leave listeners if the have persistency policy.
     list.forEach((event) => this.events.removeAllListeners(event))
-
-    // Stop keep alive.
-    clearInterval(this.keepAliveHandle)
-
-    // TODO: Refactor persistency
-    // if (this.persistencePolicy) {
-    //   if (this.persistencePolicy.maxRetry > 0) {
-    //     this.reconnect();
-    //     this.persistencePolicy.maxRetry -= 1;
-    //   } else if (this.persistencePolicy.callback != null) {
-    //     this.persistencePolicy.callback();
-    //   }
-    // }
   }
 
-  // TODO: Refactor persistency
-  // reconnect() {
-  //   return this.initElectrum(this.electrumConfig);
-  // }
+  reconnect() {
+    if (!this.reconnecting) {
+      this.reconnecting = true
+      super.reconnect().then((r) => {
+        this.reconnecting = false
+        console.log('Server Reconnected')
+        this.keepAlive()
+      }, (reason) => {
+        this.reconnecting = false
+        console.error('Error while reconnect', reason)
+      })
+    }
+  }
 
   // ElectrumX API
   //

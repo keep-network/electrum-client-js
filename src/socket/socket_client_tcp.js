@@ -5,27 +5,9 @@ const TIMEOUT = 10000
 
 class SocketClient {
   constructor(self, host, port, protocol, options) {
-    let conn
-    switch (protocol) {
-      case 'tcp':
-        conn = new net.Socket()
-        break
-      case 'tls':
-      case 'ssl':
-        let tls
-        try {
-          tls = require('tls')
-        } catch (e) {
-          throw new Error('tls package could not be loaded')
-        }
-        conn = new tls.TLSSocket(options)
-        break
-      default:
-        throw new Error('not supported protocol', protocol)
-    }
     this.host = host
     this.port = port
-    initialize(self, conn)
+    const conn = initialize(self, protocol, options)
     this.client = conn
   }
 
@@ -52,7 +34,30 @@ class SocketClient {
   }
 }
 
-function initialize(self, conn) {
+function getSocket(protocol, options) {
+  let conn
+  switch (protocol) {
+    case 'tcp':
+      conn = new net.Socket()
+      break
+    case 'tls':
+    case 'ssl':
+      let tls
+      try {
+        tls = require('tls')
+      } catch (e) {
+        throw new Error('tls package could not be loaded')
+      }
+      conn = new tls.TLSSocket(options)
+      break
+    default:
+      throw new Error('not supported protocol', protocol)
+  }
+  return conn
+}
+
+function initialize(self, protocol, options) {
+  const conn = getSocket(protocol, options)
   conn.setTimeout(TIMEOUT)
   conn.setEncoding('utf8')
   conn.setKeepAlive(true, 0)
@@ -72,6 +77,7 @@ function initialize(self, conn) {
     e.errorno = 'ETIMEDOUT'
     e.code = 'ETIMEDOUT'
     e.connect = false
+    self.onTimeout(e)
     conn.emit('error', e)
   })
 
@@ -88,6 +94,7 @@ function initialize(self, conn) {
   conn.on('error', (e) => {
     self.onError(e)
   })
+  return conn
 }
 
 module.exports = SocketClient
