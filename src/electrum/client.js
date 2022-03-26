@@ -6,26 +6,37 @@ const keepAliveInterval = 450 * 1000 // 7.5 minutes as recommended by ElectrumX 
 class ElectrumClient extends SocketClient {
   constructor(host, port, protocol, options) {
     super(host, port, protocol, options)
+    this.noReconnect = false
+    this.keepAliveRunning = false
+    this.reconnecting = false
+    // Reconnect after 2 seconds for default
+    this.reconnectOn = 2000
+    this.timeLastCall = 0
   }
 
-  async connect(clientName, electrumProtocolVersion, persistencePolicy = {maxRetry: 10, callback: null}) {
-    this.persistencePolicy = persistencePolicy
-
-    this.timeLastCall = 0
-
+  async connect(clientName, electrumProtocolVersion) {
     if (this.status === 0) {
       try {
         // Connect to Electrum Server.
         await super.connect()
-
+        // Commented out to avoid parsing error caused by frequent connect calls.
+        // Should be called by manually.
+        /*
         // Get banner.
         const banner = await this.server_banner()
         console.log(banner)
-
+        */
         // Negotiate protocol version.
-        if (clientName && electrumProtocolVersion) {
-          const version = await this.server_version(clientName, electrumProtocolVersion)
-          console.log(`Negotiated version: [${version}]`)
+        if (!this.version) {
+          if (clientName && electrumProtocolVersion) {
+            const version = await this.server_version(clientName, electrumProtocolVersion)
+            this.version = version
+            this.setSoftware()
+          } else {
+            const version = await this.server_version('electrum-client-js', '1.4')
+            this.version = version
+            this.setSoftware()
+          }
         }
       } catch (err) {
         throw new Error(`failed to connect to electrum server: [${err}]`)
@@ -33,6 +44,22 @@ class ElectrumClient extends SocketClient {
 
       this.keepAlive()
     }
+  }
+
+  setSoftware() {
+    if (this.version[0].includes('electrs')) {
+      this.software = 'electrs'
+    } else if (this.version[0].includes('Fulcrum')) {
+      this.software = 'Fulcrum'
+    } else if (this.version[0].includes('jelectum')) {
+      this.software = 'jelectum'
+    } else {
+      this.software = 'ElectrumX'
+    }
+  }
+
+  getSoftware() {
+    return this.software
   }
 
   async request(method, params) {
@@ -62,7 +89,7 @@ class ElectrumClient extends SocketClient {
    * logs an error and closes the connection.
    */
   async keepAlive() {
-    if (this.status !== 0) {
+    if (this.status !== 0 && !this.keepAliveRunning) {
       this.keepAliveHandle = setInterval(
         async (client) => {
           if (this.timeLastCall !== 0 &&
@@ -70,23 +97,67 @@ class ElectrumClient extends SocketClient {
             await client.server_ping()
               .catch((err) => {
                 console.error(`ping to server failed: [${err}]`)
-                client.close() // TODO: we should reconnect
+                this.reset()
               })
           }
         },
         keepAliveInterval,
         this // pass this context as an argument to function
       )
+      this.keepAliveRunning = true
     }
   }
 
+  // close remote connection with server without reconnection enabled
+  // should not be used if you want to reconnect
   close() {
+    this.noReconnect = true
     return super.close()
+  }
+
+  // close remote connection with server with reconnection enabled
+  // can be used like the reset button
+  reset() {
+    this.noReconnect = false
+    return super.close()
+  }
+
+  // Update reconnect period in miliseconds
+  updateInterval(reconnectOn) {
+    this.reconnectOn = reconnectOn
   }
 
   onClose() {
     super.onClose()
+    this.initReconnect()
+  }
 
+  onEnd() {
+    super.onEnd()
+    this.initReconnect()
+  }
+
+  onTimeout() {
+    super.onTimeout()
+    this.initReconnect()
+  }
+
+  initReconnect() {
+    this.removeAllListeners()
+
+    // Stop keep alive.
+    clearInterval(this.keepAliveHandle)
+    this.keepAliveRunning = false
+
+    // Try reconnection after 2 seconds (Will be resolved once reconnected)
+    if (!this.noReconnect) {
+      setTimeout(() => {
+        this.reconnect()
+      }, this.reconnectOn)
+    }
+  }
+
+  removeAllListeners() {
     const list = [
       'server.peers.subscribe',
       'blockchain.numblocks.subscribe',
@@ -96,25 +167,21 @@ class ElectrumClient extends SocketClient {
 
     // TODO: We should probably leave listeners if the have persistency policy.
     list.forEach((event) => this.events.removeAllListeners(event))
-
-    // Stop keep alive.
-    clearInterval(this.keepAliveHandle)
-
-    // TODO: Refactor persistency
-    // if (this.persistencePolicy) {
-    //   if (this.persistencePolicy.maxRetry > 0) {
-    //     this.reconnect();
-    //     this.persistencePolicy.maxRetry -= 1;
-    //   } else if (this.persistencePolicy.callback != null) {
-    //     this.persistencePolicy.callback();
-    //   }
-    // }
   }
 
-  // TODO: Refactor persistency
-  // reconnect() {
-  //   return this.initElectrum(this.electrumConfig);
-  // }
+  reconnect() {
+    if (!this.reconnecting) {
+      this.reconnecting = true
+      super.reconnect().then((r) => {
+        this.reconnecting = false
+        console.log('Server Reconnected')
+        this.keepAlive()
+      }, (reason) => {
+        this.reconnecting = false
+        console.error('Error while reconnect', reason)
+      })
+    }
+  }
 
   // ElectrumX API
   //
@@ -122,7 +189,11 @@ class ElectrumClient extends SocketClient {
   // https://electrumx.readthedocs.io/en/latest/protocol-methods.html
   //
   server_version(client_name, protocol_version) {
-    return this.request('server.version', [client_name, protocol_version])
+    if (!this.version) {
+      return this.request('server.version', [client_name, protocol_version])
+    } else {
+      return this.version
+    }
   }
   server_banner() {
     return this.request('server.banner', [])
@@ -131,7 +202,11 @@ class ElectrumClient extends SocketClient {
     return this.request('server.ping', [])
   }
   server_addPeer(features) {
-    return this.request('server.add_peer', [features])
+    if (this.software === 'electrs') {
+      return 'Unsupported method for server'
+    } else {
+      return this.request('server.add_peer', [features])
+    }
   }
   server_donation_address() {
     return this.request('server.donation_address', [])
@@ -142,9 +217,6 @@ class ElectrumClient extends SocketClient {
   server_peers_subscribe() {
     return this.request('server.peers.subscribe', [])
   }
-  blockchain_address_getProof(address) {
-    return this.request('blockchain.address.get_proof', [address])
-  }
   blockchain_scripthash_getBalance(scripthash) {
     return this.request('blockchain.scripthash.get_balance', [scripthash])
   }
@@ -152,7 +224,12 @@ class ElectrumClient extends SocketClient {
     return this.request('blockchain.scripthash.get_history', [scripthash])
   }
   blockchain_scripthash_getMempool(scripthash) {
-    return this.request('blockchain.scripthash.get_mempool', [scripthash])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support get_mempool method
+      return 'Unsupported method for server'
+    } else {
+      return this.request('blockchain.scripthash.get_mempool', [scripthash])
+    }
   }
   blockchain_scripthash_listunspent(scripthash) {
     return this.request('blockchain.scripthash.listunspent', [scripthash])
@@ -161,16 +238,33 @@ class ElectrumClient extends SocketClient {
     return this.request('blockchain.scripthash.subscribe', [scripthash])
   }
   blockchain_scripthash_unsubscribe(scripthash) {
-    return this.request('blockchain.scripthash.unsubscribe', [scripthash])
+    if (this.software !== 'ElectrumX') {
+      // Electrs, jelectum, Fulcrum doesn't support unsubscribe method
+      return 'Unsupported method for server'
+    } else {
+      return this.request('blockchain.scripthash.unsubscribe', [scripthash])
+    }
   }
   blockchain_block_header(height, cpHeight = 0) {
-    return this.request('blockchain.block.header', [height, cpHeight])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support cpHeight parameter
+      return this.request('blockchain.block.header', [Number(height)])
+    } else {
+      // ElectrumX, jelectum, Fulcrum supports cpHeight parameter
+      return this.request('blockchain.block.header', [Number(height), Number(cpHeight)])
+    }
   }
   blockchain_block_headers(startHeight, count, cpHeight = 0) {
-    return this.request('blockchain.block.headers', [startHeight, count, cpHeight])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support cpHeight parameter
+      return this.request('blockchain.block.headers', [Number(startHeight), Number(count)])
+    } else {
+      // ElectrumX, jelectum, Fulcrum supports cpHeight parameter
+      return this.request('blockchain.block.headers', [Number(startHeight), Number(count), Number(cpHeight)])
+    }
   }
   blockchainEstimatefee(number) {
-    return this.request('blockchain.estimatefee', [number])
+    return this.request('blockchain.estimatefee', [Number(number)])
   }
   blockchain_headers_subscribe() {
     return this.request('blockchain.headers.subscribe', [])

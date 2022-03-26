@@ -12,26 +12,29 @@ class SocketClient {
     this.port = port
     this.protocol = protocol
     this.options = options
-    this.status = 0
     this.callback_message_queue = {}
     this.events = new EventEmitter()
     this.mp = new util.MessageParser((body, n) => {
       this.onMessage(body, n)
     })
+    this.initSocketConnection()
+  }
 
-    switch (protocol) {
+  initSocketConnection() {
+    switch (this.protocol) {
       case 'tcp':
       case 'tls':
       case 'ssl':
-        this.client = new TCPSocketClient(this, host, port, protocol, options)
+        this.client = new TCPSocketClient(this, this.host, this.port, this.protocol, this.options)
         break
       case 'ws':
       case 'wss':
-        this.client = new WebSocketClient(this, host, port, protocol, options)
+        this.client = new WebSocketClient(this, this.host, this.port, this.protocol, this.options)
         break
       default:
         throw new Error(`invalid protocol: [${protocol}]`)
     }
+    this.status = 0
   }
 
   async connect() {
@@ -41,6 +44,12 @@ class SocketClient {
 
     this.status = 1
     return this.client.connect()
+  }
+
+  async reconnect() {
+    console.log('Reconnecting connection')
+    this.initSocketConnection()
+    await this.connect()
   }
 
   close() {
@@ -69,15 +78,19 @@ class SocketClient {
   }
 
   onMessage(body, n) {
-    const msg = JSON.parse(body)
-    if (msg instanceof Array) {
-      ; // don't support batch request
-    } else {
-      if (msg.id !== void 0) {
-        this.response(msg)
+    try {
+      const msg = JSON.parse(body)
+      if (msg instanceof Array) {
+        ; // don't support batch request
       } else {
-        this.subscribe.emit(msg.method, msg.params)
+        if (msg.id !== void 0) {
+          this.response(msg)
+        } else {
+          this.events.emit(msg.method, msg.params)
+        }
       }
+    } catch (error) {
+      console.error(error)
     }
   }
 
@@ -86,10 +99,13 @@ class SocketClient {
 
   onClose(event) {
     this.status = 0
+    // TO-DO: Rewrite this with proper debug function
+    /*
     Object.keys(this.callback_message_queue).forEach((key) => {
       this.callback_message_queue[key](new Error('close connect'))
       delete this.callback_message_queue[key]
     })
+    */
   }
 
   onRecv(chunk) {
@@ -97,7 +113,13 @@ class SocketClient {
   }
 
   onEnd(error) {
+    this.status = 0
     console.log(`onEnd: [${error}]`)
+  }
+
+  onTimeout(error) {
+    this.status = 0
+    console.log(`onTimeout: [${error}]`)
   }
 
   onError(error) {
