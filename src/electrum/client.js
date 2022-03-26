@@ -25,19 +25,41 @@ class ElectrumClient extends SocketClient {
         // Get banner.
         const banner = await this.server_banner()
         console.log(banner)
-
-        // Negotiate protocol version.
-        if (clientName && electrumProtocolVersion) {
-          const version = await this.server_version(clientName, electrumProtocolVersion)
-          console.log(`Negotiated version: [${version}]`)
-        }
         */
+        // Negotiate protocol version.
+        if (!this.version) {
+          if (clientName && electrumProtocolVersion) {
+            const version = await this.server_version(clientName, electrumProtocolVersion)
+            this.version = version
+            this.setSoftware()
+          } else {
+            const version = await this.server_version('electrum-client-js', '1.4')
+            this.version = version
+            this.setSoftware()
+          }
+        }
       } catch (err) {
         throw new Error(`failed to connect to electrum server: [${err}]`)
       }
 
       this.keepAlive()
     }
+  }
+
+  setSoftware() {
+    if (this.version[0].includes('electrs')) {
+      this.software = 'electrs'
+    } else if (this.version[0].includes('Fulcrum')) {
+      this.software = 'Fulcrum'
+    } else if (this.version[0].includes('jelectum')) {
+      this.software = 'jelectum'
+    } else {
+      this.software = 'ElectrumX'
+    }
+  }
+
+  getSoftware() {
+    return this.software
   }
 
   async request(method, params) {
@@ -167,7 +189,11 @@ class ElectrumClient extends SocketClient {
   // https://electrumx.readthedocs.io/en/latest/protocol-methods.html
   //
   server_version(client_name, protocol_version) {
-    return this.request('server.version', [client_name, protocol_version])
+    if (!this.version) {
+      return this.request('server.version', [client_name, protocol_version])
+    } else {
+      return this.version
+    }
   }
   server_banner() {
     return this.request('server.banner', [])
@@ -176,7 +202,11 @@ class ElectrumClient extends SocketClient {
     return this.request('server.ping', [])
   }
   server_addPeer(features) {
-    return this.request('server.add_peer', [features])
+    if (this.software === 'electrs') {
+      return 'Unsupported method for server'
+    } else {
+      return this.request('server.add_peer', [features])
+    }
   }
   server_donation_address() {
     return this.request('server.donation_address', [])
@@ -187,9 +217,6 @@ class ElectrumClient extends SocketClient {
   server_peers_subscribe() {
     return this.request('server.peers.subscribe', [])
   }
-  blockchain_address_getProof(address) {
-    return this.request('blockchain.address.get_proof', [address])
-  }
   blockchain_scripthash_getBalance(scripthash) {
     return this.request('blockchain.scripthash.get_balance', [scripthash])
   }
@@ -197,7 +224,12 @@ class ElectrumClient extends SocketClient {
     return this.request('blockchain.scripthash.get_history', [scripthash])
   }
   blockchain_scripthash_getMempool(scripthash) {
-    return this.request('blockchain.scripthash.get_mempool', [scripthash])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support get_mempool method
+      return 'Unsupported method for server'
+    } else {
+      return this.request('blockchain.scripthash.get_mempool', [scripthash])
+    }
   }
   blockchain_scripthash_listunspent(scripthash) {
     return this.request('blockchain.scripthash.listunspent', [scripthash])
@@ -206,16 +238,33 @@ class ElectrumClient extends SocketClient {
     return this.request('blockchain.scripthash.subscribe', [scripthash])
   }
   blockchain_scripthash_unsubscribe(scripthash) {
-    return this.request('blockchain.scripthash.unsubscribe', [scripthash])
+    if (this.software !== 'ElectrumX') {
+      // Electrs, jelectum, Fulcrum doesn't support unsubscribe method
+      return 'Unsupported method for server'
+    } else {
+      return this.request('blockchain.scripthash.unsubscribe', [scripthash])
+    }
   }
   blockchain_block_header(height, cpHeight = 0) {
-    return this.request('blockchain.block.header', [height, cpHeight])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support cpHeight parameter
+      return this.request('blockchain.block.header', [Number(height)])
+    } else {
+      // ElectrumX, jelectum, Fulcrum supports cpHeight parameter
+      return this.request('blockchain.block.header', [Number(height), Number(cpHeight)])
+    }
   }
   blockchain_block_headers(startHeight, count, cpHeight = 0) {
-    return this.request('blockchain.block.headers', [startHeight, count, cpHeight])
+    if (this.software === 'electrs') {
+      // Electrs doesn't support cpHeight parameter
+      return this.request('blockchain.block.headers', [Number(startHeight), Number(count)])
+    } else {
+      // ElectrumX, jelectum, Fulcrum supports cpHeight parameter
+      return this.request('blockchain.block.headers', [Number(startHeight), Number(count), Number(cpHeight)])
+    }
   }
   blockchainEstimatefee(number) {
-    return this.request('blockchain.estimatefee', [number])
+    return this.request('blockchain.estimatefee', [Number(number)])
   }
   blockchain_headers_subscribe() {
     return this.request('blockchain.headers.subscribe', [])
