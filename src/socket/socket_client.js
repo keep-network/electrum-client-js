@@ -69,7 +69,13 @@ class SocketClient {
   }
 
   onMessage(body, n) {
-    const msg = JSON.parse(body)
+    let msg
+    try {
+      msg = JSON.parse(body)
+    } catch (e) {
+      console.error('failed to parse message body: [%s]', body)
+      return
+    }
     if (msg instanceof Array) {
       ; // don't support batch request
     } else {
