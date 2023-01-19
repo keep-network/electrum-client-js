@@ -1,27 +1,27 @@
+const ELECTRUMX_HOST = '34.70.22.39' // "electrumx-server.test.tbtc.network"
+
 const servers = [
   {
     protocol: 'tcp',
     port: '80',
-    host: 'electrumx-server.test.tbtc.network',
+    host: ELECTRUMX_HOST,
   },
   {
     protocol: 'ws',
     port: '8080',
-    host: 'electrumx-server.test.tbtc.network',
+    host: ELECTRUMX_HOST,
   },
-
-  // FIXME: The client doesn't work with SSL connection.
-  // ssl: {
-  //   protocol: "ssl",
-  //   port: "443",
-  //   host: "electrumx-server.test.tbtc.network",
-  // },
+  {
+    protocol: 'ssl',
+    port: '443',
+    host: ELECTRUMX_HOST,
+  },
   // FIXME: The client doesn't work with WSS connection.
-  // wss: {
-  //   protocol: "wss",
-  //   port: "8443",
-  // host: "electrumx-server.test.tbtc.network",
-  // },
+  {
+    protocol: 'wss',
+    port: '8443',
+    host: ELECTRUMX_HOST,
+  },
 ]
 
 module.exports = {
