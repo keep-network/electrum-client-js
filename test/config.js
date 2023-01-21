@@ -1,4 +1,4 @@
-const ELECTRUMX_HOST = '34.70.22.39' // "electrumx-server.test.tbtc.network"
+const ELECTRUMX_HOST = 'electrumx-server.test.tbtc.network'
 
 const servers = [
   {
