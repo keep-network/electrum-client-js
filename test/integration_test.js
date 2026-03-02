@@ -5,76 +5,73 @@ const assert = chai.assert
 
 const fs = require('fs')
 
-const config = require('./config')
+const {servers} = require('./config')
 
 describe('ElectrumClient', async () => {
   let txData
 
   before(async () => {
-    txData = JSON.parse(await fs.readFileSync('./test/tx.json', 'utf8'))
+    txData = JSON.parse(fs.readFileSync('./test/tx.json', 'utf8'))
   })
 
-  context('when connected', async () => {
-    config.serversArray.forEach((server) => {
-      describe(`for ${server.protocol} protocol`, async () => {
-        let client
+  describe('for all protocols', async () => {
+    servers.forEach((server) => {
+      const label = `${server.protocol}://${server.host}:${server.port}${server.path || ''}`
+      describe(label, async () => {
+        describe('when connected', async () => {
+          let client
 
-        before(async () => {
-          client = new ElectrumClient(
-            server.host,
-            server.port,
-            server.protocol,
-            server.options
-          )
+          before(async () => {
+            client = new ElectrumClient(
+              server.host,
+              server.port,
+              server.protocol,
+              server.options,
+              server.path,
+            )
 
-          await client
-            .connect('test_client' + server.protocol, '1.4.2')
-            .catch((err) => {
-              console.error(
-                `failed to connect with config [${JSON.stringify(
-                  server
-                )}]: [${err}]`
-              )
-            })
+            await client.connect('test_client' + server.protocol, '1.4.2')
+          })
+
+          after(async () => {
+            await client.close()
+          })
+
+          it('request returns result', async () => {
+            const expectedResult = txData.hex
+            const result = await client.blockchain_transaction_get(txData.hash)
+
+            assert.equal(result, expectedResult, 'unexpected result')
+          })
         })
 
-        after(async () => {
-          await client.close()
-        })
+        describe('when not connected', async () => {
+          let client
 
-        it('request returns result', async () => {
-          const expectedResult = txData.hex
-          const result = await client.blockchain_transaction_get(txData.hash)
+          before(async () => {
+            client = new ElectrumClient(
+              server.host,
+              server.port,
+              server.protocol,
+              server.options,
+              server.path,
+            )
+          })
 
-          assert.equal(result, expectedResult, 'unexpected result')
+          it('request throws error', async () => {
+            await client.blockchain_transaction_get(txData.hash).then(
+              (value) => {
+                // onFulfilled
+                assert.fail('not failed as expected')
+              },
+              (reason) => {
+                // onRejected
+                assert.include(reason.toString(), `connection not established`)
+              },
+            )
+          })
         })
       })
-    })
-  })
-
-  context('when not connected', async () => {
-    before(async () => {
-      const server = config.servers.tcp
-
-      client = new ElectrumClient(
-        server.host,
-        server.port,
-        server.protocol,
-        server.options
-      )
-    })
-
-    it('request throws error', async () => {
-      await client.blockchain_transaction_get(txData.hash).then(
-        (value) => {
-          // onFulfilled
-          assert.fail('not failed as expected')
-        },
-        (reason) => {
-          // onRejected
-          assert.include(reason.toString(), `connection not established`)
-        }
-      )
     })
   })
   // TODO: Add tests
