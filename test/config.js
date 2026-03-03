@@ -1,4 +1,4 @@
-const ELECTRUMX_API_KEY = process.env.ELECTRUMX_API_KEY
+const ELECTRUM_API_KEY = process.env.ELECTRUM_API_KEY
 
 const servers = [
   {
@@ -23,7 +23,7 @@ const servers = [
     protocol: 'wss',
     port: 443,
     host: 'electrum.mainnet.boar.network',
-    path: `/${ELECTRUMX_API_KEY}`,
+    path: `/${ELECTRUM_API_KEY}`,
   },
 ]
 
