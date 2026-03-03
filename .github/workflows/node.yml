@@ -39,3 +39,5 @@ jobs:
 
       - name: Run tests
         run: npm test
+        env:
+          ELECTRUM_API_KEY: ${{ secrets.ELECTRUM_API_KEY }}
