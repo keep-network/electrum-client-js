@@ -22,7 +22,7 @@ class WebSocketClient {
       undefined,
       undefined,
       undefined,
-      this.options
+      this.options,
     )
 
     this.client = client

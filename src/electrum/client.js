@@ -75,7 +75,7 @@ class ElectrumClient extends SocketClient {
           }
         },
         keepAliveInterval,
-        this // pass this context as an argument to function
+        this, // pass this context as an argument to function
       )
     }
   }
