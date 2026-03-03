@@ -2,17 +2,18 @@
 const W3CWebSocket = require('websocket').w3cwebsocket
 
 class WebSocketClient {
-  constructor(self, host, port, protocol, options) {
+  constructor(self, host, port, protocol, options, path) {
     this.self = self
     this.host = host
     this.port = port
     this.protocol = protocol
     this.options = options
+    this.path = path || ''
     this.client = null
   }
 
   async connect() {
-    const url = `${this.protocol}://${this.host}:${this.port}`
+    const url = `${this.protocol}://${this.host}:${this.port}${this.path}`
 
     // TODO: Add docs
     // https://github.com/theturtle32/WebSocket-Node/blob/master/docs/W3CWebSocket.md#constructor
@@ -21,7 +22,7 @@ class WebSocketClient {
       undefined,
       undefined,
       undefined,
-      this.options
+      this.options,
     )
 
     this.client = client

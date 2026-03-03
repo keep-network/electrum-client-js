@@ -4,8 +4,8 @@ const util = require('./util')
 const keepAliveInterval = 450 * 1000 // 7.5 minutes as recommended by ElectrumX SESSION_TIMEOUT
 
 class ElectrumClient extends SocketClient {
-  constructor(host, port, protocol, options) {
-    super(host, port, protocol, options)
+  constructor(host, port, protocol, options, path) {
+    super(host, port, protocol, options, path)
   }
 
   async connect(clientName, electrumProtocolVersion, persistencePolicy = {maxRetry: 10, callback: null}) {
@@ -75,7 +75,7 @@ class ElectrumClient extends SocketClient {
           }
         },
         keepAliveInterval,
-        this // pass this context as an argument to function
+        this, // pass this context as an argument to function
       )
     }
   }

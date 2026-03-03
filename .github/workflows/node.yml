@@ -11,11 +11,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v4
         with:
-          node-version: "14.x"
+          node-version: "20.x"
           cache: "npm"
 
       - name: Install dependencies
@@ -27,11 +27,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v2
+      - uses: actions/setup-node@v4
         with:
-          node-version: "14.x"
+          node-version: "20.x"
           cache: "npm"
 
       - name: Install dependencies
@@ -39,3 +39,5 @@ jobs:
 
       - name: Run tests
         run: npm test
+        env:
+          ELECTRUM_API_KEY: ${{ secrets.ELECTRUM_API_KEY }}
